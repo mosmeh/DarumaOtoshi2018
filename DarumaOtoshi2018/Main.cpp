@@ -3,14 +3,14 @@
 constexpr double holeWidth = 0.25;
 constexpr double barrierInterval = 0.5;
 constexpr double initialBarrierHeight = 0.1;
-constexpr double planePosY = 0.2;
+constexpr double playerPosY = 0.2;
 constexpr double sideWallWidth = 0.1;
 
 struct Barrier {
     enum class Type {
-        Left = 0,
-        Right = 1,
-        Slit = 2
+        Left,
+        Right,
+        Slit
     };
 
     const Type type;
@@ -36,7 +36,7 @@ struct Barrier {
             break;
         }
 
-        return yPos < planePosY && planePosY < yPos + height;
+        return yPos <= playerPosY && playerPosY <= yPos + height;
     }
 
     bool isVisible() const {
@@ -186,10 +186,14 @@ public:
     }
 
     void draw() const override {
-        getData().font(U"TITLE").drawAt(Window::Center(), Palette::White);
-        getData().font(U"PRESS ANY KEY TO START").drawAt(Window::Center() + Vec2(0.0, getData().font.height()), Palette::White);
+        getData().font(U"タイトル").drawAt(Window::Center(), Palette::White);
+        getData().font(U"どれかキーをおして はじめる").drawAt(Window::Center() + Vec2(0.0, getData().font.height()), Palette::White);
     }
 };
+
+void drawScore(const Data& data) {
+    data.font(U"SCORE ", Pad(data.getScore(), { 5, U'0' }), U" HIGHSCORE ", Pad(data.highScore, { 5,U'0' })).draw(Arg::topCenter = Vec2(Window::Width() / 2.0, 0.0), Palette::Black);
+}
 
 class Playing : public App::Scene {
 public:
@@ -220,14 +224,14 @@ public:
 
         auto& level = getData().level;
 
-        const double planeSpeed = 5e-5 * level.getMileage() + 5e-3;
-        planePosX += std::sin(angle) * planeSpeed;
+        const double speed = 5e-5 * level.getMileage() + 5e-3;
+        playerPosX += std::sin(angle) * speed;
 
-        if (level.hit(planePosX)) {
+        if (level.hit(playerPosX)) {
             changeScene(Scene::GameOver, 0, false);
         }
 
-        level.update(std::cos(angle) * planeSpeed);
+        level.update(std::cos(angle) * speed);
 
         getData().highScore = std::max(getData().getScore(), getData().highScore);
     }
@@ -236,15 +240,14 @@ public:
         getData().level.draw();
 
         RectF r(50, 50);
-        r.setCenter(planePosX * Window::Width(), planePosY * Window::Height());
+        r.setCenter(playerPosX * Window::Width(), playerPosY * Window::Height());
         r.draw(Palette::Red);
 
-        const int score = getData().getScore();
-        getData().font(U"SCORE ", score, U" HIGHSCORE ", getData().highScore).draw(Arg::topCenter = Vec2(Window::Width() / 2.0, 0.0), Palette::Black);
+        drawScore(getData());
     }
 
 private:
-    double planePosX = 0.5;
+    double playerPosX = 0.5;
     int direction = 0;
 };
 
@@ -260,12 +263,10 @@ public:
 
     void draw() const override {
         getData().level.draw();
-
-        const int score = getData().getScore();
-        getData().font(U"SCORE ", score, U" HIGHSCORE ", getData().highScore).draw(Arg::topCenter = Vec2(Window::Width() / 2.0, 0.0), Palette::Black);
+        drawScore(getData());
 
         getData().font(U"GAME OVER").drawAt(Window::Center(), Palette::Black);
-        getData().font(U"PRESS ANY KEY TO RETRY").drawAt(Window::Center() + Vec2(0.0, getData().font.height()), Palette::Black);
+        getData().font(U"どれかキーをおして もういちどはじめる").drawAt(Window::Center() + Vec2(0.0, getData().font.height()), Palette::Black);
     }
 };
 
