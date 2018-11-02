@@ -44,16 +44,17 @@ struct Barrier {
     }
 
     void draw() const {
+        static constexpr double r = 5.0;
         switch (type) {
         case Type::Left:
-            RectF(0, yPos * Window::Height(), leftToHole * Window::Width(), height * Window::Height()).draw(Palette::Black);
+            RoundRect({ sideWallWidth * Window::Width(), yPos * Window::Height() }, { (leftToHole - sideWallWidth) * Window::Width(), height * Window::Height() }, r).drawFrame(r, Palette::Black);
             break;
         case Type::Right:
-            RectF(leftToHole * Window::Width(), yPos * Window::Height(), (1.0 - leftToHole) * Window::Width(), height * Window::Height()).draw(Palette::Black);
+            RoundRect({ leftToHole * Window::Width(), yPos * Window::Height() }, { (1.0 - leftToHole - sideWallWidth) * Window::Width(), height * Window::Height() }, r).drawFrame(r, Palette::Black);
             break;
         case Type::Slit:
-            RectF(0, yPos * Window::Height(), leftToHole * Window::Width(), height * Window::Height()).draw(Palette::Black);
-            RectF((leftToHole + holeWidth) * Window::Width(), yPos * Window::Height(), (1.0 - leftToHole - holeWidth) * Window::Width(), height * Window::Height()).draw(Palette::Black);
+            RoundRect({ sideWallWidth * Window::Width(), yPos * Window::Height() }, { (leftToHole - sideWallWidth) * Window::Width(), height * Window::Height() }, r).drawFrame(r, Palette::Black);
+            RoundRect({ (leftToHole + holeWidth) * Window::Width(), yPos * Window::Height() }, { (1.0 - leftToHole - holeWidth - sideWallWidth) * Window::Width(), height * Window::Height() }, r).drawFrame(r, Palette::Black);
             break;
         }
     }
@@ -82,7 +83,8 @@ public:
     }
 
     void draw() const {
-        RectF(sideWallWidth * Window::Width(), 0, (1.0 - 2.0 * sideWallWidth) * Window::Width(), Window::Height()).draw(Palette::White);
+        Line({ sideWallWidth * Window::Width(), 0.0 }, { sideWallWidth * Window::Width(), Window::Height() }).draw(5.0, Palette::Black);
+        Line({ (1.0 - sideWallWidth) * Window::Width(), 0.0 }, { (1.0 - sideWallWidth) * Window::Width(), Window::Height() }).draw(5.0, Palette::Black);
 
         for (const auto& barrier : barriers) {
             barrier.draw();
@@ -147,7 +149,10 @@ struct Data {
     int highScore = 0;
     Optional<detail::Gamepad_impl> gamepad;
     Level level;
+    double playerPosX, playerAngle;
+    Stopwatch sw;
     Font font = Font(30, U"PixelMplus10-Regular.ttf");
+    Font largeFont = Font(60, U"PixelMplus10-Regular.ttf");
 
     int getScore() const {
         return static_cast<int>(level.getMileage() * 5.0);
@@ -186,8 +191,10 @@ public:
     }
 
     void draw() const override {
-        getData().font(U"タイトル").drawAt(Window::Center(), Palette::White);
-        getData().font(U"どれかキーをおして はじめる").drawAt(Window::Center() + Vec2(0.0, getData().font.height()), Palette::White);
+        int i = 0;
+        for (const auto& line : { U"タイトル", U"", U"そうさ", U"← → かたむける", U"", U"なにかキーをおして はじめる"}) {
+            getData().font(line).drawAt(Window::Center() + Vec2(0.0, i++ * getData().font.height()), Palette::Black);
+        }
     }
 };
 
@@ -195,10 +202,20 @@ void drawScore(const Data& data) {
     data.font(U"SCORE ", Pad(data.getScore(), { 5, U'0' }), U" HIGHSCORE ", Pad(data.highScore, { 5,U'0' })).draw(Arg::topCenter = Vec2(Window::Width() / 2.0, 0.0), Palette::Black);
 }
 
+void drawPlayer(const Data& data) {
+    TextureAsset(U"player")
+        .resized({ 100, 100 })
+        .rotated(-data.playerAngle + 0.3 * std::sin(data.sw.sF() * 3.0))
+        .drawAt(data.playerPosX * Window::Width(), playerPosY * Window::Height());
+}
+
 class Playing : public App::Scene {
 public:
     Playing(const InitData& init) : IScene(init) {
         getData().level = Level();
+        getData().playerPosX = 0.5;
+        getData().playerAngle = 0.0;
+        getData().sw.restart();
     }
 
     void update() override {
@@ -215,40 +232,40 @@ public:
             if (keyRight) {
                 direction = std::min(direction + 1, static_cast<int>(maxDirection));
             }
+
+            static constexpr std::array<double, maxDirection + 1> angles = {
+                0.0, Math::Pi / 6.0, Math::Pi / 4.0, Math::Pi / 3.0
+            };
+            targetAngle = (direction > 0 ? 1 : -1) * angles.at(std::abs(direction));
         }
 
-        static constexpr std::array<double, maxDirection + 1> angles = {
-            0.0, Math::Pi / 6.0, Math::Pi / 4.0, Math::Pi / 3.0
-        };
-        const double angle = (direction > 0 ? 1 : -1) * angles.at(std::abs(direction));
+        getData().playerAngle += 0.1 * (targetAngle - getData().playerAngle);
 
         auto& level = getData().level;
 
         const double speed = 5e-5 * level.getMileage() + 5e-3;
-        playerPosX += std::sin(angle) * speed;
+        getData().playerPosX += std::sin(getData().playerAngle) * speed;
 
-        if (level.hit(playerPosX)) {
+        if (level.hit(getData().playerPosX)) {
             changeScene(Scene::GameOver, 0, false);
+            getData().sw.pause();
+            return;
         }
 
-        level.update(std::cos(angle) * speed);
+        level.update(std::cos(getData().playerAngle) * speed);
 
         getData().highScore = std::max(getData().getScore(), getData().highScore);
     }
 
     void draw() const override {
         getData().level.draw();
-
-        RectF r(50, 50);
-        r.setCenter(playerPosX * Window::Width(), playerPosY * Window::Height());
-        r.draw(Palette::Red);
-
+        drawPlayer(getData());
         drawScore(getData());
     }
 
 private:
-    double playerPosX = 0.5;
     int direction = 0;
+    double targetAngle = 0.0;
 };
 
 class GameOver : public App::Scene {
@@ -263,20 +280,23 @@ public:
 
     void draw() const override {
         getData().level.draw();
+        drawPlayer(getData());
         drawScore(getData());
 
-        getData().font(U"GAME OVER").drawAt(Window::Center(), Palette::Black);
-        getData().font(U"どれかキーをおして もういちどはじめる").drawAt(Window::Center() + Vec2(0.0, getData().font.height()), Palette::Black);
+        getData().largeFont(U"GAME OVER").drawAt(Window::Center(), Palette::Black);
+        getData().font(U"どれかキーをおして もういちどはじめる").drawAt(Window::Center() + Vec2(0.0, getData().largeFont.height()), Palette::Black);
     }
 };
 
 void Main() {
     constexpr int windowSize = 600;
-    Window::SetTitle(U"test");
+    Window::SetTitle(U"DARUMA OTOSHI 2018");
     Window::Resize(windowSize, windowSize);
 
-    Graphics::SetBackground(Palette::Black);
+    Graphics::SetBackground(Palette::White);
     Graphics::SetTargetFrameRateHz(60);
+
+    TextureAsset::Register(U"player", U"daruma.png");
 
     const auto data = std::make_shared<Data>();
 
