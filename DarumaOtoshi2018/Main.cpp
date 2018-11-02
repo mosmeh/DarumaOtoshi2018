@@ -182,7 +182,9 @@ using App = SceneManager<Scene, Data>;
 
 class Title : public App::Scene {
 public:
-    Title(const InitData& init) : IScene(init) {}
+    Title(const InitData& init) : IScene(init) {
+        Graphics::SetBackground(Palette::Black);
+    }
 
     void update() override {
         if (getData().anyKeyIsDown()) {
@@ -191,9 +193,11 @@ public:
     }
 
     void draw() const override {
+        TextureAsset(U"player").drawAt({ 0.2 * Window::Width(), 0.01 * Window::Height() });
         int i = 0;
-        for (const auto& line : { U"タイトル", U"", U"そうさ", U"← → かたむける", U"", U"なにかキーをおして はじめる"}) {
-            getData().font(line).drawAt(Window::Center() + Vec2(0.0, i++ * getData().font.height()), Palette::Black);
+        getData().largeFont(U"DARUMA OTOSHI 2018").drawAt(Window::Center(), Palette::White);
+        for (const auto& line : { U"", U"そうさ", U"← → かたむける", U"", U"なにかキーをおして はじめる"}) {
+            getData().font(line).drawAt(Window::Center() + Vec2(0.0, getData().largeFont.height() + i++ * getData().font.height()), Palette::White);
         }
     }
 };
@@ -212,6 +216,7 @@ void drawPlayer(const Data& data) {
 class Playing : public App::Scene {
 public:
     Playing(const InitData& init) : IScene(init) {
+        Graphics::SetBackground(Palette::White);
         getData().level = Level();
         getData().playerPosX = 0.5;
         getData().playerAngle = 0.0;
@@ -293,10 +298,13 @@ void Main() {
     Window::SetTitle(U"DARUMA OTOSHI 2018");
     Window::Resize(windowSize, windowSize);
 
-    Graphics::SetBackground(Palette::White);
     Graphics::SetTargetFrameRateHz(60);
 
     TextureAsset::Register(U"player", U"daruma.png");
+    
+    AudioAsset::Register(U"bgm", U"bgm.mp3");
+    AudioAsset(U"bgm").setLoop(true);
+    AudioAsset(U"bgm").play();
 
     const auto data = std::make_shared<Data>();
 
